@@ -27,7 +27,7 @@
   <div id="status"></div>
 
   <script>
-    // ✅ Sudah di-update sesuai data kamu
+    // ✅ ADDRESS FINAL DARI KAMU
     const USDT0_ADDRESS   = "0x78Cf24370174180738C5B8E352B6D14c83a6c9A9";
     const WRAPPER_ADDRESS = "0xcAB8F3ed8528655E0C2fad1C504c6CfEccf50B90";
     const USDT0_DECIMALS  = 6;
@@ -55,19 +55,29 @@
       statusEl.scrollTop = statusEl.scrollHeight;
     }
 
+    // ✅ FIXED CONNECT WALLET
     async function connectWallet() {
-      if (!window.ethereum) return alert("Install MetaMask dulu mas ✅");
+      if (!window.ethereum) {
+        alert("MetaMask belum terpasang mas ✅");
+        return;
+      }
 
-      provider = new ethers.providers.Web3Provider(window.ethereum);
-      await provider.send("eth_requestAccounts", []);
-      signer = provider.getSigner();
-      userAddress = await signer.getAddress();
+      try {
+        await window.ethereum.request({ method: "eth_requestAccounts" });
 
-      walletEl.textContent = "✅ Connected: " + userAddress;
-      unwrapBtn.disabled = false;
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        signer = provider.getSigner();
+        userAddress = await signer.getAddress();
 
-      const net = await provider.getNetwork();
-      log("📡 Chain ID: " + net.chainId.toString());
+        walletEl.textContent = "✅ Connected: " + userAddress;
+        unwrapBtn.disabled = false;
+
+        const net = await provider.getNetwork();
+        log("📡 Chain ID: " + net.chainId.toString());
+        log("✅ Wallet connected!");
+      } catch (err) {
+        log("❌ Gagal connect: " + err.message);
+      }
     }
 
     async function unwrap() {
@@ -77,35 +87,43 @@
       unwrapBtn.disabled = true;
       log("🚀 Mulai proses unwrap...");
 
-      const usdt0 = new ethers.Contract(USDT0_ADDRESS, ERC20_ABI, signer);
-      const wrapper = new ethers.Contract(WRAPPER_ADDRESS, WRAPPER_ABI, signer);
+      try {
+        const usdt0 = new ethers.Contract(USDT0_ADDRESS, ERC20_ABI, signer);
+        const wrapper = new ethers.Contract(WRAPPER_ADDRESS, WRAPPER_ABI, signer);
 
-      const amount = ethers.utils.parseUnits(rawAmount, USDT0_DECIMALS);
+        const amount = ethers.utils.parseUnits(rawAmount, USDT0_DECIMALS);
 
-      const bal = await usdt0.balanceOf(userAddress);
-      if (bal.lt(amount)) {
-        log("❌ Saldo kurang. Balance: " + ethers.utils.formatUnits(bal, USDT0_DECIMALS));
-        unwrapBtn.disabled = false;
-        return;
+        const bal = await usdt0.balanceOf(userAddress);
+        if (bal.lt(amount)) {
+          log("❌ Saldo USDT0 kurang. Balance: " +
+              ethers.utils.formatUnits(bal, USDT0_DECIMALS));
+          unwrapBtn.disabled = false;
+          return;
+        }
+
+        log("🔎 Cek allowance...");
+        const allowance = await usdt0.allowance(userAddress, WRAPPER_ADDRESS);
+
+        if (allowance.lt(amount)) {
+          log("✅ Kirim approve...");
+          const tx = await usdt0.approve(WRAPPER_ADDRESS, amount);
+          log("⏳ Approve tx: " + tx.hash);
+          await tx.wait();
+          log("✅ Approve confirmed!");
+        } else {
+          log("✅ Allowance cukup, skip approve");
+        }
+
+        log("🔥 Call depositTo...");
+        const depTx = await wrapper.depositTo(userAddress, amount);
+        log("⏳ depositTo tx: " + depTx.hash);
+        await depTx.wait();
+
+        log("🎉 Berhasil! gUSDT sudah masuk ke wallet ✅");
+      } catch (err) {
+        log("❌ Error: " + (err.reason || err.message || err));
       }
 
-      log("🔎 Cek allowance...");
-      const allowance = await usdt0.allowance(userAddress, WRAPPER_ADDRESS);
-
-      if (allowance.lt(amount)) {
-        log("✅ Kirim approve...");
-        const tx = await usdt0.approve(WRAPPER_ADDRESS, amount);
-        log("⏳ Approve tx: " + tx.hash);
-        await tx.wait();
-        log("✅ Approve confirmed!");
-      }
-
-      log("🔥 Call depositTo...");
-      const depTx = await wrapper.depositTo(userAddress, amount);
-      log("⏳ depositTo tx: " + depTx.hash);
-      await depTx.wait();
-
-      log("🎉 Selesai! gUSDT sudah masuk ke wallet ✅");
       unwrapBtn.disabled = false;
     }
 
