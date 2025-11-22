@@ -23,11 +23,11 @@
   <button id="connectBtn" class="primary">Connect Wallet</button>
   <div id="walletAddress"></div>
 
-  <div class="label">Saldo USDT0: <span id="usdt0Balance">-</span></div>
-  <div class="label">Saldo gUSDT (native): <span id="gasBalance">-</span></div>
+  <div class="label">USDT0 Balance: <span id="usdt0Balance">-</span></div>
+  <div class="label">gUSDT (native) Balance: <span id="gasBalance">-</span></div>
 
-  <input id="amount" type="text" placeholder="Jumlah USDT0 (contoh: 50)" />
-  <button id="unwrapBtn" class="primary" disabled>Unwrap USDT0 → gUSDT</button>
+  <input id="amount" type="text" placeholder="Enter USDT0 amount (e.g., 50)" />
+  <button id="unwrapBtn" class="primary" disabled>Unwrap Now</button>
 
   <div id="status"></div>
 
@@ -76,7 +76,7 @@
 
     async function connectWallet() {
       if (!window.ethereum) {
-        alert("Install MetaMask dulu mas ✅");
+        alert("Please install MetaMask ✅");
         return;
       }
 
@@ -86,12 +86,12 @@
       signer = provider.getSigner();
       userAddress = await signer.getAddress();
 
-      walletEl.textContent = "✅ Connected: " + userAddress;
+      walletEl.textContent = "✅ Wallet connected: " + userAddress;
       unwrapBtn.disabled = false;
 
       const net = await provider.getNetwork();
-      log("📡 Chain ID: " + net.chainId.toString());
-      log("✅ Wallet berhasil connect!");
+      log("📡 Connected to Chain ID: " + net.chainId.toString());
+      log("✅ Wallet successfully connected!");
 
       await refreshBalances();
     }
@@ -99,12 +99,12 @@
     async function unwrap() {
       const rawAmount = amountInput.value.trim();
       if (!rawAmount) {
-        alert("Isi jumlah USDT0 dulu mas ✅");
+        alert("Please enter an amount ✅");
         return;
       }
 
       unwrapBtn.disabled = true;
-      log("🚀 Mulai unwrap USDT0 → gUSDT...");
+      log("🚀 Starting unwrap USDT0 → gUSDT...");
 
       try {
         const usdt0   = new window.ethers.Contract(USDT0_ADDRESS, ERC20_ABI, signer);
@@ -112,35 +112,34 @@
 
         const amount = window.ethers.utils.parseUnits(rawAmount, USDT0_DECIMALS);
 
-        // 🔹 Cek saldo USDT0
         const bal = await usdt0.balanceOf(userAddress);
-        log("💰 Saldo USDT0: " + window.ethers.utils.formatUnits(bal, USDT0_DECIMALS));
+        log("💰 Current USDT0 balance: " + window.ethers.utils.formatUnits(bal, USDT0_DECIMALS));
+
         if (bal.lt(amount)) {
-          log("❌ Saldo USDT0 kurang dari amount yang diminta.");
+          log("❌ Not enough USDT0 balance.");
           unwrapBtn.disabled = false;
           return;
         }
 
-        // 🔹 Cek allowance
         const allowance = await usdt0.allowance(userAddress, WRAPPER_ADDRESS);
-        log("🔎 Allowance USDT0 ke wrapper: " + window.ethers.utils.formatUnits(allowance, USDT0_DECIMALS));
+        log("🔎 Current allowance: " + window.ethers.utils.formatUnits(allowance, USDT0_DECIMALS));
 
         if (allowance.lt(amount)) {
-          log("✅ Kirim approve (MaxUint256)...");
+          log("✅ Sending approve transaction...");
           const approveTx = await usdt0.approve(WRAPPER_ADDRESS, window.ethers.constants.MaxUint256);
-          log("⏳ Approve tx: " + approveTx.hash);
+          log("⏳ Approve tx hash: " + approveTx.hash);
           await approveTx.wait();
           log("✅ Approve confirmed!");
         } else {
-          log("✅ Allowance cukup — skip approve");
+          log("✅ Allowance sufficient — skipping approve");
         }
 
-        // 🔹 Panggil withdrawTo → UNWRAP USDT0 → gUSDT
-        log("🔥 Call withdrawTo (UNWRAP USDT0 → gUSDT)...");
+        log("🔥 Sending unwrap transaction (withdrawTo)...");
         const tx = await wrapper.withdrawTo(userAddress, amount);
-        log("⏳ withdrawTo tx: " + tx.hash);
+        log("⏳ Transaction hash: " + tx.hash);
         await tx.wait();
-        log("🎉 SUCCESS! Harusnya gUSDT (native) nambah dan USDT0 berkurang ✅");
+
+        log("🎉 SUCCESS! USDT0 has been unwrapped into gUSDT ✅");
 
         await refreshBalances();
 
