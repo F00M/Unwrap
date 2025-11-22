@@ -4,7 +4,10 @@
   <meta charset="UTF-8" />
   <title>Unwrap USDT0 to gUSDT - Stable Testnet</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.min.js"></script>
+
+  <!-- ✅ UMD build so ethers is available globally -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+
   <style>
     body { font-family: sans-serif; max-width: 480px; margin: 40px auto; padding: 0 16px; }
     button { padding: 10px; border-radius: 6px; border: none; cursor: pointer; }
@@ -16,8 +19,6 @@
 <body>
   <h2>Unwrap USDT0 → gUSDT (Stable Testnet)</h2>
 
-  <p>Pastikan MetaMask kamu sudah di <b>Stable Testnet</b>.</p>
-
   <button id="connectBtn" class="primary">Connect Wallet</button>
   <div id="walletAddress"></div>
 
@@ -27,7 +28,7 @@
   <div id="status"></div>
 
   <script>
-    // ✅ ADDRESS FINAL DARI KAMU
+    // ✅ Contract addresses (from you)
     const USDT0_ADDRESS   = "0x78Cf24370174180738C5B8E352B6D14c83a6c9A9";
     const WRAPPER_ADDRESS = "0xcAB8F3ed8528655E0C2fad1C504c6CfEccf50B90";
     const USDT0_DECIMALS  = 6;
@@ -55,17 +56,16 @@
       statusEl.scrollTop = statusEl.scrollHeight;
     }
 
-    // ✅ FIXED CONNECT WALLET
     async function connectWallet() {
       if (!window.ethereum) {
-        alert("MetaMask belum terpasang mas ✅");
+        alert("Install MetaMask dulu mas ✅");
         return;
       }
 
       try {
         await window.ethereum.request({ method: "eth_requestAccounts" });
 
-        provider = new ethers.providers.Web3Provider(window.ethereum);
+        provider = new window.ethers.providers.Web3Provider(window.ethereum);
         signer = provider.getSigner();
         userAddress = await signer.getAddress();
 
@@ -74,9 +74,9 @@
 
         const net = await provider.getNetwork();
         log("📡 Chain ID: " + net.chainId.toString());
-        log("✅ Wallet connected!");
+        log("✅ Wallet berhasil connect!");
       } catch (err) {
-        log("❌ Gagal connect: " + err.message);
+        log("❌ Wallet gagal connect: " + err.message);
       }
     }
 
@@ -87,43 +87,33 @@
       unwrapBtn.disabled = true;
       log("🚀 Mulai proses unwrap...");
 
-      try {
-        const usdt0 = new ethers.Contract(USDT0_ADDRESS, ERC20_ABI, signer);
-        const wrapper = new ethers.Contract(WRAPPER_ADDRESS, WRAPPER_ABI, signer);
+      const usdt0 = new window.ethers.Contract(USDT0_ADDRESS, ERC20_ABI, signer);
+      const wrapper = new window.ethers.Contract(WRAPPER_ADDRESS, WRAPPER_ABI, signer);
 
-        const amount = ethers.utils.parseUnits(rawAmount, USDT0_DECIMALS);
+      const amount = window.ethers.utils.parseUnits(rawAmount, USDT0_DECIMALS);
 
-        const bal = await usdt0.balanceOf(userAddress);
-        if (bal.lt(amount)) {
-          log("❌ Saldo USDT0 kurang. Balance: " +
-              ethers.utils.formatUnits(bal, USDT0_DECIMALS));
-          unwrapBtn.disabled = false;
-          return;
-        }
-
-        log("🔎 Cek allowance...");
-        const allowance = await usdt0.allowance(userAddress, WRAPPER_ADDRESS);
-
-        if (allowance.lt(amount)) {
-          log("✅ Kirim approve...");
-          const tx = await usdt0.approve(WRAPPER_ADDRESS, amount);
-          log("⏳ Approve tx: " + tx.hash);
-          await tx.wait();
-          log("✅ Approve confirmed!");
-        } else {
-          log("✅ Allowance cukup, skip approve");
-        }
-
-        log("🔥 Call depositTo...");
-        const depTx = await wrapper.depositTo(userAddress, amount);
-        log("⏳ depositTo tx: " + depTx.hash);
-        await depTx.wait();
-
-        log("🎉 Berhasil! gUSDT sudah masuk ke wallet ✅");
-      } catch (err) {
-        log("❌ Error: " + (err.reason || err.message || err));
+      const bal = await usdt0.balanceOf(userAddress);
+      if (bal.lt(amount)) {
+        log("❌ Saldo kurang. Balance: " + window.ethers.utils.formatUnits(bal, USDT0_DECIMALS));
+        unwrapBtn.disabled = false;
+        return;
       }
 
+      const allowance = await usdt0.allowance(userAddress, WRAPPER_ADDRESS);
+      if (allowance.lt(amount)) {
+        log("✅ Kirim approve...");
+        const tx = await usdt0.approve(WRAPPER_ADDRESS, amount);
+        log("⏳ Approve tx: " + tx.hash);
+        await tx.wait();
+        log("✅ Approve confirmed!");
+      }
+
+      log("🔥 Call depositTo...");
+      const depTx = await wrapper.depositTo(userAddress, amount);
+      log("⏳ depositTo tx: " + depTx.hash);
+      await depTx.wait();
+
+      log("🎉 Selesai! gUSDT sudah masuk ke wallet ✅");
       unwrapBtn.disabled = false;
     }
 
